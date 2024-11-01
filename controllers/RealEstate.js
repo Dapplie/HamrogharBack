@@ -173,29 +173,61 @@ const createProperty = async (req, res) => {
 
 
 
-// Get all properties where active is equal to true
+// // Get all properties where active is equal to true
+// const getProperties = async (req, res) => {
+//   try {
+//     const properties = await Property.find({ active: true });
+//     const today = new Date();
+//     const propertiesWithIdAsString = await Promise.all(properties.map(async property => {
+//       const { _id, ...rest } = property.toJSON();
+//       const propertyId = _id.toString();
+//       const reservations = await BookNow.find({
+//         propertyId,
+//         startDate: { $lt: today },
+//         endDate: { $gt: today },
+//         ownerConfirmation: true
+//       });
+//       if (reservations.length === 0 && !reservations.some(reservation => reservation.startDate.getTime() === today.getTime() || reservation.endDate.getTime() === today.getTime())) {
+//         return { _id: propertyId, ...rest };
+//       }
+//       return null;
+//     }));
+//     const filteredProperties = propertiesWithIdAsString.filter(property => property !== null);
+//     res.status(200).json(filteredProperties);
+//   } catch (err) {
+//     res.status(500).json({ message: err.message });
+//   }
+// };
+
+
+
+
+
+// Get active properties with either no bookings or expired bookings
 const getProperties = async (req, res) => {
   try {
-    const properties = await Property.find({ active: true });
-    const today = new Date();
-    const propertiesWithIdAsString = await Promise.all(properties.map(async property => {
-      const { _id, ...rest } = property.toJSON();
-      const propertyId = _id.toString();
-      const reservations = await BookNow.find({
-        propertyId,
-        startDate: { $lt: today },
-        endDate: { $gt: today },
-        ownerConfirmation: true
+    const currentDate = new Date();
+
+    // Find all properties with active: true
+    const activeProperties = await Property.find({ active: true });
+
+    const validProperties = [];
+    for (const property of activeProperties) {
+      // Check if there is any valid booking with a future endDate for the property
+      const bookingExists = await BookNow.exists({ 
+        propertyId: property._id,
+        endDate: { $gte: currentDate } 
       });
-      if (reservations.length === 0 && !reservations.some(reservation => reservation.startDate.getTime() === today.getTime() || reservation.endDate.getTime() === today.getTime())) {
-        return { _id: propertyId, ...rest };
+
+      // If no future booking exists, add property to the result
+      if (!bookingExists) {
+        validProperties.push(property);
       }
-      return null;
-    }));
-    const filteredProperties = propertiesWithIdAsString.filter(property => property !== null);
-    res.status(200).json(filteredProperties);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+    }
+
+    res.status(200).json(validProperties);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 };
 
